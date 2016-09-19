@@ -1,4 +1,4 @@
-//! Safe atomic boxes. 
+//! Safe atomic boxes.
 //!
 //! The standard library provides atomic booleans, integers, and pointers.
 //! `AtomicPtr` is safe for loading, storing, and so forth; but pointers are
@@ -87,13 +87,19 @@ impl<T> Drop for AtomicBox<T> {
     }
 }
 
+impl<T> Default for AtomicBox<T> where Box<T>: Default {
+    fn default() -> AtomicBox<T> {
+        AtomicBox::new(Default::default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::thread::spawn;
     use std::sync::{Arc, Barrier};
     use std::sync::atomic::Ordering;
-    
+
     #[test]
     fn atomic_box_works() {
         let b = AtomicBox::new(Box::new("hello world"));
@@ -149,10 +155,9 @@ mod tests {
     #[test]
     fn atomic_threads() {
         const NTHREADS: usize = 9;
-        
+
         let gate = Arc::new(Barrier::new(NTHREADS));
-        let starter: Vec<u8> = vec![];
-        let abox = Arc::new(AtomicBox::new(Box::new(starter)));
+        let abox: Arc<AtomicBox<Vec<u8>>> = Arc::new(Default::default());
         let handles: Vec<_> =
             (0 .. NTHREADS as u8)
             .map(|t| {
@@ -182,7 +187,7 @@ mod tests {
         for val in *abox.swap(Box::new(vec![]), Ordering::AcqRel) {
             counts[val as usize] += 1;
         }
-        
+
         println!("{:?}", counts);
         for t in 0 .. NTHREADS {
             assert_eq!(counts[t], 100);

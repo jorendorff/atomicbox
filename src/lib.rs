@@ -11,10 +11,21 @@
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::mem::forget;
 use std::ptr::null_mut;
+use std::fmt::{self, Debug, Formatter};
 
 /// A wrapper for a `Box<T>` that can be atomically swapped.
 pub struct AtomicBox<T> {
     ptr: AtomicPtr<T>
+}
+
+impl<T> Debug for AtomicBox<T> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        let p = self.ptr.load(Ordering::Relaxed);
+        try!(f.write_str("AtomicBox("));
+        try!(fmt::Pointer::fmt(&p, f));
+        try!(f.write_str(")"));
+        Ok(())
+    }
 }
 
 impl<T> AtomicBox<T> {
@@ -176,5 +187,12 @@ mod tests {
         for t in 0 .. NTHREADS {
             assert_eq!(counts[t], 100);
         }
+    }
+
+    #[test]
+    fn debug_fmt() {
+        let my_box = Box::new(32);
+        let expected = format!("AtomicBox({:p})", my_box);
+        assert_eq!(format!("{:?}", AtomicBox::new(my_box)), expected);
     }
 }

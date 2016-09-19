@@ -97,21 +97,21 @@ impl<T> AtomicOptionBox<T> {
         }
     }
 
-    /// Returns a reference to the contained value.
+    /// Returns a mutable reference to the contained value.
     ///
     /// This is safe because it borrows the `AtomicOptionBox` mutably, which
     /// ensures that no other threads can concurrently access either the atomic
     /// pointer field or the boxed data it points to.
-    ///
-    /// To get a mutable reference, `swap` the value out and back in. While
-    /// data is inside an `AtomicOptionBox`, it can't be safely mutated, even
-    /// if no other threads *currently* have pointers to it.
-    pub fn get(&mut self) -> Option<&T> {
-        let ptr = self.ptr.load(Ordering::Acquire);
+    pub fn get_mut(&mut self) -> Option<&mut T> {
+        // I have a convoluted theory that Relaxed is good enough here.
+        // See comment in AtomicBox::get_mut().
+        let ptr = self.ptr.load(Ordering::Relaxed);
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { &*ptr })
+            Some(unsafe {
+                &mut *ptr
+            })
         }
     }
 }

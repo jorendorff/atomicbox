@@ -78,18 +78,23 @@ impl<T> AtomicBox<T> {
         }
     }
 
-    /// Returns a reference to the contained value.
+    /// Returns a mutable reference to the contained value.
     ///
     /// This is safe because it borrows the `AtomicBox` mutably, which ensures
     /// that no other threads can concurrently access either the atomic pointer field
     /// or the boxed data it points to.
-    ///
-    /// To get a mutable reference, `swap` the value out and back in. While
-    /// data is inside an `AtomicBox`, it can't be safely mutated, even if no
-    /// other threads *currently* have pointers to it.
-    pub fn get(&mut self) -> &T {
-        let ptr = self.ptr.load(Ordering::Acquire);
-        unsafe { &*ptr }
+    pub fn get_mut(&mut self) -> &mut T {
+        // Relaxed suffices here because this thread must already have
+        // rendezvoused with any other thread that's been modifying shared
+        // data, and executed an Acquire barrier, in order for the caller to
+        // have a `mut` reference.  Symmetrically, no barrier is needed when
+        // the reference expires, because this thread must rendezvous with
+        // other threads, and execute a Release barrier, before this AtomicBox
+        // becomes shared again.
+        let ptr = self.ptr.load(Ordering::Relaxed);
+        unsafe {
+            &mut *ptr
+        }
     }
 }
 

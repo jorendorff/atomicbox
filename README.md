@@ -8,6 +8,7 @@ It turns out that a safe atomic `Box` type is possible. Unfortunately, the
 only operation it supports is `swap`. Still, this is sufficient for some
 lock-free data structures, so here it is!
 
+
 ## License
 
 AtomicBox is distributed under the terms of both the MIT license and the

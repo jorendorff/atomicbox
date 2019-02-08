@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 use std::mem::forget;
+use std::mem::replace;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -49,16 +50,43 @@ impl<T> AtomicBox<T> {
     ///     assert_eq!(*prev_value, "one");
     ///
     pub fn swap(&self, other: Box<T>, order: Ordering) -> Box<T> {
+        let mut result = other;
+        self.swap_mut(&mut result, order);
+        result
+    }
+
+    /// Atomically swaps the contents of this `AtomicBox` with the contents of `other`.
+    ///
+    /// This does not allocate or free memory, and it neither clones nor drops
+    /// any values.  `*other` is moved into `self`.
+    ///
+    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// as other values would not be safe if `T` contains any data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ordering` is not one of the two allowed values.
+    ///
+    /// # Examples
+    ///
+    ///     use std::sync::atomic::Ordering;
+    ///     use atomicbox::AtomicBox;
+    ///
+    ///     let atom = AtomicBox::new(Box::new("one"));
+    ///     let mut boxed = Box::new("two");
+    ///     atom.swap_mut(&mut boxed, Ordering::AcqRel);
+    ///     assert_eq!(*boxed, "one");
+    ///
+    pub fn swap_mut(&self, other: &mut Box<T>, order: Ordering) {
         match order {
             Ordering::AcqRel | Ordering::SeqCst => {}
             _ => panic!("invalid ordering for atomic swap")
         }
 
-        let new_ptr = Box::into_raw(other);
-        let old_ptr = self.ptr.swap(new_ptr, order);
-        unsafe {
-            Box::from_raw(old_ptr)
-        }
+        let ptr = self.ptr.swap(&mut **other, order);
+        let new_box = unsafe { Box::from_raw(ptr) };
+        let old_box = replace(other, new_box);
+        forget(old_box);
     }
 
     /// Consume this `AtomicBox`, returning the last box value it contained.
@@ -135,11 +163,21 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[test]
-    fn atomic_box_works() {
+    fn atomic_box_swap_works() {
         let b = AtomicBox::new(Box::new("hello world"));
         let bis = Box::new("bis");
         assert_eq!(b.swap(bis, Ordering::AcqRel), Box::new("hello world"));
         assert_eq!(b.swap(Box::new(""), Ordering::AcqRel), Box::new("bis"));
+    }
+
+    #[test]
+    fn atomic_box_swap_mut_works() {
+        let b = AtomicBox::new(Box::new("hello world"));
+        let mut bis = Box::new("bis");
+        b.swap_mut(&mut bis, Ordering::AcqRel);
+        assert_eq!(bis, Box::new("hello world"));
+        b.swap_mut(&mut bis, Ordering::AcqRel);
+        assert_eq!(bis, Box::new("bis"));
     }
 
     #[test]

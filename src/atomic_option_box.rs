@@ -1,5 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 use std::mem::forget;
+use std::mem::replace;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -9,9 +10,9 @@ pub struct AtomicOptionBox<T> {
     ptr: AtomicPtr<T>
 }
 
-fn into_ptr<T>(value: Option<Box<T>>) -> *mut T {
-    match value {
-        Some(box_value) => Box::into_raw(box_value),
+fn into_ptr<T>(value: &mut Option<Box<T>>) -> *mut T {
+    match *value {
+        Some(ref mut box_value) => &mut **box_value,
         None => null_mut()
     }
 }
@@ -67,6 +68,34 @@ impl<T> AtomicOptionBox<T> {
     ///     assert_eq!(prev_value, None);
     ///
     pub fn swap(&self, other: Option<Box<T>>, order: Ordering) -> Option<Box<T>> {
+        let mut result = other;
+        self.swap_mut(&mut result, order);
+        result
+    }
+
+    /// Atomically swaps the contents of this `AtomicOptionBox` with the contents of `other`.
+    ///
+    /// This does not allocate or free memory, and it neither clones nor drops
+    /// any values.  `*other` is moved into `self`.
+    ///
+    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// as other values would not be safe if `T` contains any data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ordering` is not one of the two allowed values.
+    ///
+    /// # Examples
+    ///
+    ///     use std::sync::atomic::Ordering;
+    ///     use atomicbox::AtomicOptionBox;
+    ///
+    ///     let atom = AtomicOptionBox::new(None);
+    ///     let mut boxed = Some(Box::new("ok"));
+    ///     let prev_value = atom.swap_mut(&mut boxed, Ordering::AcqRel);
+    ///     assert_eq!(boxed, None);
+    ///
+    pub fn swap_mut(&self, other: &mut Option<Box<T>>, order: Ordering) {
         match order {
             Ordering::AcqRel | Ordering::SeqCst => {}
             _ => panic!("invalid ordering for atomic swap")
@@ -74,9 +103,9 @@ impl<T> AtomicOptionBox<T> {
 
         let new_ptr = into_ptr(other);
         let old_ptr = self.ptr.swap(new_ptr, order);
-        unsafe {
-            from_ptr(old_ptr)
-        }
+        let new_box = unsafe { from_ptr(old_ptr) };
+        let old_box = replace(other, new_box);
+        forget(old_box);
     }
 
     /// Consume this `AtomicOptionBox`, returning the last option value it
@@ -157,12 +186,25 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[test]
-    fn atomic_option_box_works() {
+    fn atomic_option_box_swap_works() {
         let b = AtomicOptionBox::new(Some(Box::new("hello world")));
         let bis = Box::new("bis");
         assert_eq!(b.swap(None, Ordering::AcqRel), Some(Box::new("hello world")));
         assert_eq!(b.swap(Some(bis), Ordering::AcqRel), None);
         assert_eq!(b.swap(None, Ordering::AcqRel), Some(Box::new("bis")));
+    }
+
+    #[test]
+    fn atomic_option_box_swap_mut_works() {
+        let b = AtomicOptionBox::new(Some(Box::new("hello world")));
+        let mut bis = None;
+        b.swap_mut(&mut bis, Ordering::AcqRel);
+        assert_eq!(bis, Some(Box::new("hello world")));
+        bis = Some(Box::new("bis"));
+        b.swap_mut(&mut bis, Ordering::AcqRel);
+        assert_eq!(bis, None);
+        b.swap_mut(&mut bis, Ordering::AcqRel);
+        assert_eq!(bis, Some(Box::new("bis")));
     }
 
     #[test]

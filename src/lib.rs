@@ -13,5 +13,3 @@ mod atomic_option_box;
 
 pub use atomic_box::AtomicBox;
 pub use atomic_option_box::AtomicOptionBox;
-
-

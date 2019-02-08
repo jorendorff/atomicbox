@@ -8,13 +8,13 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 pub struct AtomicOptionBox<T> {
     /// Pointer to a `T` value in the heap, representing `Some(t)`;
     /// or a null pointer for `None`.
-    ptr: AtomicPtr<T>
+    ptr: AtomicPtr<T>,
 }
 
 fn into_ptr<T>(value: Option<Box<T>>) -> *mut T {
     match value {
         Some(box_value) => Box::into_raw(box_value),
-        None => null_mut()
+        None => null_mut(),
     }
 }
 
@@ -37,7 +37,7 @@ impl<T> AtomicOptionBox<T> {
     ///
     pub fn new(value: Option<Box<T>>) -> AtomicOptionBox<T> {
         let abox = AtomicOptionBox {
-            ptr: AtomicPtr::new(null_mut())
+            ptr: AtomicPtr::new(null_mut()),
         };
         if let Some(box_value) = value {
             abox.ptr.store(Box::into_raw(box_value), Ordering::Release);
@@ -99,7 +99,7 @@ impl<T> AtomicOptionBox<T> {
     pub fn swap_mut(&self, other: &mut Option<Box<T>>, order: Ordering) {
         match order {
             Ordering::AcqRel | Ordering::SeqCst => {}
-            _ => panic!("invalid ordering for atomic swap")
+            _ => panic!("invalid ordering for atomic swap"),
         }
 
         let new_ptr = into_ptr(unsafe { ptr::read(other) });
@@ -122,9 +122,7 @@ impl<T> AtomicOptionBox<T> {
     pub fn into_inner(self) -> Option<Box<T>> {
         let last_ptr = self.ptr.load(Ordering::Acquire);
         forget(self);
-        unsafe {
-            from_ptr(last_ptr)
-        }
+        unsafe { from_ptr(last_ptr) }
     }
 
     /// Returns a mutable reference to the contained value.
@@ -139,9 +137,7 @@ impl<T> AtomicOptionBox<T> {
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe {
-                &mut *ptr
-            })
+            Some(unsafe { &mut *ptr })
         }
     }
 }
@@ -180,7 +176,6 @@ impl<T> Debug for AtomicOptionBox<T> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,7 +185,10 @@ mod tests {
     fn atomic_option_box_swap_works() {
         let b = AtomicOptionBox::new(Some(Box::new("hello world")));
         let bis = Box::new("bis");
-        assert_eq!(b.swap(None, Ordering::AcqRel), Some(Box::new("hello world")));
+        assert_eq!(
+            b.swap(None, Ordering::AcqRel),
+            Some(Box::new("hello world"))
+        );
         assert_eq!(b.swap(Some(bis), Ordering::AcqRel), None);
         assert_eq!(b.swap(None, Ordering::AcqRel), Some(Box::new("bis")));
     }
@@ -220,11 +218,11 @@ mod tests {
 
         let box3 = atom.swap(Some(box2), Ordering::AcqRel).unwrap(); // box1 out, box2 in
         let p3 = format!("{:p}", box3);
-        assert_eq!(p3, p1);  // box3 is box1
+        assert_eq!(p3, p1); // box3 is box1
 
-        let box4 = atom.swap(None, Ordering::AcqRel).unwrap();  // box2 out, None in
+        let box4 = atom.swap(None, Ordering::AcqRel).unwrap(); // box2 out, None in
         let p4 = format!("{:p}", box4);
-        assert_eq!(p4, p2);  // box4 is box2
+        assert_eq!(p4, p2); // box4 is box2
     }
 
     #[test]
@@ -259,14 +257,20 @@ mod tests {
     #[should_panic(expected = "invalid ordering for atomic swap")]
     fn cant_use_foolish_swap_ordering_type() {
         let atom = AtomicOptionBox::new(Some(Box::new(0)));
-        atom.swap(None, Ordering::Release);  // nope
+        atom.swap(None, Ordering::Release); // nope
     }
 
     #[test]
     fn debug_fmt() {
         let my_box = Box::new(32);
         let expected = format!("AtomicOptionBox({:p})", my_box);
-        assert_eq!(format!("{:?}", AtomicOptionBox::new(Some(my_box))), expected);
-        assert_eq!(format!("{:?}", AtomicOptionBox::<String>::new(None)), "AtomicOptionBox(None)");
+        assert_eq!(
+            format!("{:?}", AtomicOptionBox::new(Some(my_box))),
+            expected
+        );
+        assert_eq!(
+            format!("{:?}", AtomicOptionBox::<String>::new(None)),
+            "AtomicOptionBox(None)"
+        );
     }
 }

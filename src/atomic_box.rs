@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 /// A type that holds a single `Box<T>` value and can be safely shared between
 /// threads.
 pub struct AtomicBox<T> {
-    ptr: AtomicPtr<T>
+    ptr: AtomicPtr<T>,
 }
 
 impl<T> AtomicBox<T> {
@@ -20,7 +20,7 @@ impl<T> AtomicBox<T> {
     ///
     pub fn new(value: Box<T>) -> AtomicBox<T> {
         let abox = AtomicBox {
-            ptr: AtomicPtr::new(null_mut())
+            ptr: AtomicPtr::new(null_mut()),
         };
         abox.ptr.store(Box::into_raw(value), Ordering::Release);
         abox
@@ -79,7 +79,7 @@ impl<T> AtomicBox<T> {
     pub fn swap_mut(&self, other: &mut Box<T>, order: Ordering) {
         match order {
             Ordering::AcqRel | Ordering::SeqCst => {}
-            _ => panic!("invalid ordering for atomic swap")
+            _ => panic!("invalid ordering for atomic swap"),
         }
 
         let other_ptr = Box::into_raw(unsafe { ptr::read(other) });
@@ -101,9 +101,7 @@ impl<T> AtomicBox<T> {
     pub fn into_inner(self) -> Box<T> {
         let last_ptr = self.ptr.load(Ordering::Acquire);
         forget(self);
-        unsafe {
-            Box::from_raw(last_ptr)
-        }
+        unsafe { Box::from_raw(last_ptr) }
     }
 
     /// Returns a mutable reference to the contained value.
@@ -120,9 +118,7 @@ impl<T> AtomicBox<T> {
         // other threads, and execute a Release barrier, before this AtomicBox
         // becomes shared again.
         let ptr = self.ptr.load(Ordering::Relaxed);
-        unsafe {
-            &mut *ptr
-        }
+        unsafe { &mut *ptr }
     }
 }
 
@@ -136,7 +132,10 @@ impl<T> Drop for AtomicBox<T> {
     }
 }
 
-impl<T> Default for AtomicBox<T> where Box<T>: Default {
+impl<T> Default for AtomicBox<T>
+where
+    Box<T>: Default,
+{
     /// The default `AtomicBox<T>` value boxes the default `T` value.
     fn default() -> AtomicBox<T> {
         AtomicBox::new(Default::default())
@@ -154,13 +153,12 @@ impl<T> Debug for AtomicBox<T> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread::spawn;
-    use std::sync::{Arc, Barrier};
     use std::sync::atomic::Ordering;
+    use std::sync::{Arc, Barrier};
+    use std::thread::spawn;
 
     #[test]
     fn atomic_box_swap_works() {
@@ -192,11 +190,11 @@ mod tests {
 
         let box3 = atom.swap(box2, Ordering::AcqRel); // box1 out, box2 in
         let p3 = format!("{:p}", box3);
-        assert_eq!(p3, p1);  // box3 is box1
+        assert_eq!(p3, p1); // box3 is box1
 
-        let box4 = atom.swap(Box::new(5), Ordering::AcqRel);  // box2 out, throwaway value in
+        let box4 = atom.swap(Box::new(5), Ordering::AcqRel); // box2 out, throwaway value in
         let p4 = format!("{:p}", box4);
-        assert_eq!(p4, p2);  // box4 is box2
+        assert_eq!(p4, p2); // box4 is box2
     }
 
     #[test]
@@ -230,15 +228,14 @@ mod tests {
 
         let gate = Arc::new(Barrier::new(NTHREADS));
         let abox: Arc<AtomicBox<Vec<u8>>> = Arc::new(Default::default());
-        let handles: Vec<_> =
-            (0 .. NTHREADS as u8)
+        let handles: Vec<_> = (0..NTHREADS as u8)
             .map(|t| {
                 let my_gate = gate.clone();
                 let my_box = abox.clone();
                 spawn(move || {
                     my_gate.wait();
                     let mut my_vec = Box::new(vec![]);
-                    for _ in 0 .. 100 {
+                    for _ in 0..100 {
                         my_vec = my_box.swap(my_vec, Ordering::AcqRel);
                         my_vec.push(t);
                     }
@@ -261,7 +258,7 @@ mod tests {
         }
 
         println!("{:?}", counts);
-        for t in 0 .. NTHREADS {
+        for t in 0..NTHREADS {
             assert_eq!(counts[t], 100);
         }
     }
@@ -270,7 +267,7 @@ mod tests {
     #[should_panic(expected = "invalid ordering for atomic swap")]
     fn cant_use_foolish_swap_ordering_type() {
         let atom = AtomicBox::new(Box::new(0));
-        atom.swap(Box::new(44), Ordering::Release);  // nope
+        atom.swap(Box::new(44), Ordering::Release); // nope
     }
 
     #[test]

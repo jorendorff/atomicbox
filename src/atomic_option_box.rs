@@ -1,7 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 use std::mem::forget;
-use std::mem::replace;
-use std::ptr::null_mut;
+use std::ptr::{self, null_mut};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// A type that holds a single `Option<Box<T>>` value and can be safely shared
@@ -10,9 +9,9 @@ pub struct AtomicOptionBox<T> {
     ptr: AtomicPtr<T>
 }
 
-fn into_ptr<T>(value: &mut Option<Box<T>>) -> *mut T {
-    match *value {
-        Some(ref mut box_value) => &mut **box_value,
+fn into_ptr<T>(value: Option<Box<T>>) -> *mut T {
+    match value {
+        Some(box_value) => Box::into_raw(box_value),
         None => null_mut()
     }
 }
@@ -76,7 +75,7 @@ impl<T> AtomicOptionBox<T> {
     /// Atomically swaps the contents of this `AtomicOptionBox` with the contents of `other`.
     ///
     /// This does not allocate or free memory, and it neither clones nor drops
-    /// any values.  `*other` is moved into `self`.
+    /// any values. The pointers in `*other` and `self` are simply exchanged.
     ///
     /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
     /// as other values would not be safe if `T` contains any data.
@@ -101,11 +100,11 @@ impl<T> AtomicOptionBox<T> {
             _ => panic!("invalid ordering for atomic swap")
         }
 
-        let new_ptr = into_ptr(other);
+        let new_ptr = into_ptr(unsafe { ptr::read(other) });
         let old_ptr = self.ptr.swap(new_ptr, order);
-        let new_box = unsafe { from_ptr(old_ptr) };
-        let old_box = replace(other, new_box);
-        forget(old_box);
+        unsafe {
+            ptr::write(other, from_ptr(old_ptr));
+        }
     }
 
     /// Consume this `AtomicOptionBox`, returning the last option value it

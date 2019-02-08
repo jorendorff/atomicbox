@@ -1,7 +1,6 @@
 use std::fmt::{self, Debug, Formatter};
 use std::mem::forget;
-use std::mem::replace;
-use std::ptr::null_mut;
+use std::ptr::{self, null_mut};
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// A type that holds a single `Box<T>` value and can be safely shared between
@@ -58,7 +57,7 @@ impl<T> AtomicBox<T> {
     /// Atomically swaps the contents of this `AtomicBox` with the contents of `other`.
     ///
     /// This does not allocate or free memory, and it neither clones nor drops
-    /// any values.  `*other` is moved into `self`.
+    /// any values. The pointers in `*other` and `self` are simply exchanged.
     ///
     /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
     /// as other values would not be safe if `T` contains any data.
@@ -83,10 +82,11 @@ impl<T> AtomicBox<T> {
             _ => panic!("invalid ordering for atomic swap")
         }
 
-        let ptr = self.ptr.swap(&mut **other, order);
-        let new_box = unsafe { Box::from_raw(ptr) };
-        let old_box = replace(other, new_box);
-        forget(old_box);
+        let other_ptr = Box::into_raw(unsafe { ptr::read(other) });
+        let ptr = self.ptr.swap(other_ptr, order);
+        unsafe {
+            ptr::write(other, Box::from_raw(ptr));
+        }
     }
 
     /// Consume this `AtomicBox`, returning the last box value it contained.

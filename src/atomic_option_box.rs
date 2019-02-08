@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 /// A type that holds a single `Option<Box<T>>` value and can be safely shared
 /// between threads.
 pub struct AtomicOptionBox<T> {
+    /// Pointer to a `T` value in the heap, representing `Some(t)`;
+    /// or a null pointer for `None`.
     ptr: AtomicPtr<T>
 }
 

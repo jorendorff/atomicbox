@@ -1,7 +1,7 @@
 [package]
 name = "atomicbox"
 description = "Safe atomic pointers to boxed data."
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Jason Orendorff <jason.orendorff@gmail.com>"]
 license = "MIT/Apache-2.0"
 readme = "README.md"

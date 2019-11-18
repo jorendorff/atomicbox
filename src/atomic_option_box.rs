@@ -74,6 +74,34 @@ impl<T> AtomicOptionBox<T> {
         result
     }
 
+    /// Atomically set this `AtomicOptionBox` to `None` and return the
+    /// previous value.
+    ///
+    /// This does not allocate or free memory, and it neither clones nor drops
+    /// any values. It is equivalent to calling `self.swap(None, order)`
+    ///
+    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// as other values would not be safe if `T` contains any data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ordering` is not one of the two allowed values.
+    ///
+    /// # Examples
+    ///
+    ///     use std::sync::atomic::Ordering;
+    ///     use atomicbox::AtomicOptionBox;
+    ///
+    ///     let atom = AtomicOptionBox::new(Some(Box::new("ok")));
+    ///     let prev_value = atom.take(Ordering::AcqRel);
+    ///     assert!(prev_value.is_some());
+    ///     let prev_value = atom.take(Ordering::AcqRel);
+    ///     assert!(prev_value.is_none());
+    ///
+    pub fn take(&self, order: Ordering) -> Option<Box<T>> {
+        self.swap(None, order)
+    }
+
     /// Atomically swaps the contents of this `AtomicOptionBox` with the contents of `other`.
     ///
     /// This does not allocate or free memory, and it neither clones nor drops

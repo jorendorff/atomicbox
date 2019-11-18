@@ -193,13 +193,13 @@ impl<T> Debug for AtomicOptionBox<T> {
     /// `"AtomicOptionBox(0x12341234)"` or `"AtomicOptionBox(None)"`.
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         let p = self.ptr.load(Ordering::Relaxed);
-        try!(f.write_str("AtomicOptionBox("));
+        f.write_str("AtomicOptionBox(")?;
         if p.is_null() {
-            try!(f.write_str("None"));
+            f.write_str("None")?;
         } else {
-            try!(fmt::Pointer::fmt(&p, f));
+            fmt::Pointer::fmt(&p, f)?;
         }
-        try!(f.write_str(")"));
+        f.write_str(")")?;
         Ok(())
     }
 }

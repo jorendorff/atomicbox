@@ -146,9 +146,9 @@ impl<T> Debug for AtomicBox<T> {
     /// The `{:?}` format of an `AtomicBox<T>` looks like `"AtomicBox(0x12341234)"`.
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         let p = self.ptr.load(Ordering::Relaxed);
-        try!(f.write_str("AtomicBox("));
-        try!(fmt::Pointer::fmt(&p, f));
-        try!(f.write_str(")"));
+        f.write_str("AtomicBox(")?;
+        fmt::Pointer::fmt(&p, f)?;
+        f.write_str(")")?;
         Ok(())
     }
 }

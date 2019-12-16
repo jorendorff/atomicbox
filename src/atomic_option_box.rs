@@ -42,6 +42,23 @@ impl<T> AtomicOptionBox<T> {
         }
     }
 
+    /// Creates a new `AtomicOptionBox` with no value.
+    ///
+    /// Equivalent to `AtomicOptionBox::new(None)`, but can be used in const
+    /// context.
+    ///
+    /// # Examples
+    ///
+    ///     use atomicbox::AtomicOptionBox;
+    ///
+    ///     static GLOBAL_BOX: AtomicOptionBox<u32> = AtomicOptionBox::none();
+    ///
+    pub const fn none() -> Self {
+        Self {
+            ptr: AtomicPtr::new(null_mut()),
+        }
+    }
+
     /// Atomically set this `AtomicOptionBox` to `other` and return the
     /// previous value.
     ///

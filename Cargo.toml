@@ -1,5 +1,6 @@
 [package]
 name = "atomicbox"
+edition = "2018"
 description = "Safe atomic pointers to boxed data."
 version = "0.3.0"
 authors = ["Jason Orendorff <jason.orendorff@gmail.com>"]

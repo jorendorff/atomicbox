@@ -8,6 +8,10 @@
 //! only operation it supports is `swap`. Still, this is sufficient for some
 //! lock-free data structures, so here it is!
 
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
 mod atomic_box;
 mod atomic_option_box;
 

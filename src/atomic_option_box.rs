@@ -1,7 +1,8 @@
-use std::fmt::{self, Debug, Formatter};
-use std::mem::forget;
-use std::ptr::{self, null_mut};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use alloc::boxed::Box;
+use core::fmt::{self, Debug, Formatter};
+use core::mem::forget;
+use core::ptr::{self, null_mut};
+use core::sync::atomic::{AtomicPtr, Ordering};
 
 /// A type that holds a single `Option<Box<T>>` value and can be safely shared
 /// between threads.
@@ -207,7 +208,8 @@ impl<T> Debug for AtomicOptionBox<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::Ordering;
+    use alloc::{format, string::String};
+    use core::sync::atomic::Ordering;
 
     #[test]
     fn atomic_option_box_swap_works() {
@@ -255,8 +257,8 @@ mod tests {
 
     #[test]
     fn atomic_box_drops() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
+        use alloc::sync::Arc;
+        use core::sync::atomic::{AtomicUsize, Ordering};
 
         struct K(Arc<AtomicUsize>, usize);
 

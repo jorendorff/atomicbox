@@ -54,6 +54,32 @@ impl<T> AtomicBox<T> {
         result
     }
 
+    /// Atomically set this `AtomicBox` to `other` and drop its previous value.
+    ///
+    /// The `AtomicBox` takes ownership of `other`.
+    ///
+    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// as other values would not be safe if `T` contains any data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ordering` is not one of the two allowed values.
+    ///
+    /// # Examples
+    ///
+    ///     use std::sync::atomic::Ordering;
+    ///     use atomicbox::AtomicBox;
+    ///
+    ///     let atom = AtomicBox::new(Box::new("one"));
+    ///     atom.store(Box::new("two"), Ordering::AcqRel);
+    ///     assert_eq!(atom.into_inner(), Box::new("two"));
+    ///
+    pub fn store(&self, other: Box<T>, order: Ordering) {
+        let mut result = other;
+        self.swap_mut(&mut result, order);
+        drop(result)
+    }
+
     /// Atomically swaps the contents of this `AtomicBox` with the contents of `other`.
     ///
     /// This does not allocate or free memory, and it neither clones nor drops
@@ -166,6 +192,14 @@ mod tests {
         let bis = Box::new("bis");
         assert_eq!(b.swap(bis, Ordering::AcqRel), Box::new("hello world"));
         assert_eq!(b.swap(Box::new(""), Ordering::AcqRel), Box::new("bis"));
+    }
+
+    #[test]
+    fn atomic_box_store_works() {
+        let b = AtomicBox::new(Box::new("hello world"));
+        let bis = Box::new("bis");
+        b.store(bis, Ordering::AcqRel);
+        assert_eq!(b.into_inner(), Box::new("bis"));
     }
 
     #[test]

@@ -34,6 +34,7 @@
 //! be on the heap.
 
 mod atomic_box;
+mod atomic_box_base;
 mod atomic_option_box;
 
 pub use atomic_box::AtomicBox;

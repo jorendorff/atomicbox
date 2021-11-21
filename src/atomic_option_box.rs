@@ -1,29 +1,35 @@
+use atomic_box_base::{AtomicBoxBase, PointerConvertible};
 use std::fmt::{self, Debug, Formatter};
-use std::mem::forget;
-use std::ptr::{self, null_mut};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::ptr::null_mut;
+use std::sync::atomic::Ordering;
 
-/// A type that holds a single `Option<Box<T>>` value and can be safely shared
+// TODO: move into impl block once https://github.com/rust-lang/rust/issues/8995
+// is solved.
+type OptionBox<T> = Option<Box<T>>;
+
+impl<T> PointerConvertible for OptionBox<T> {
+    type Target = T;
+
+    fn into_raw(b: Self) -> *mut T {
+        match b {
+            Some(box_value) => Box::into_raw(box_value),
+            None => null_mut(),
+        }
+    }
+
+    unsafe fn from_raw(ptr: *mut T) -> Self {
+        if ptr.is_null() {
+            None
+        } else {
+            Some(Box::from_raw(ptr))
+        }
+    }
+}
+
+/// A type that holds a single `OptionBox<T>` value and can be safely shared
 /// between threads.
 pub struct AtomicOptionBox<T> {
-    /// Pointer to a `T` value in the heap, representing `Some(t)`;
-    /// or a null pointer for `None`.
-    ptr: AtomicPtr<T>,
-}
-
-fn into_ptr<T>(value: Option<Box<T>>) -> *mut T {
-    match value {
-        Some(box_value) => Box::into_raw(box_value),
-        None => null_mut(),
-    }
-}
-
-unsafe fn from_ptr<T>(ptr: *mut T) -> Option<Box<T>> {
-    if ptr.is_null() {
-        None
-    } else {
-        Some(Box::from_raw(ptr))
-    }
+    base: AtomicBoxBase<OptionBox<T>>,
 }
 
 impl<T> AtomicOptionBox<T> {
@@ -35,14 +41,10 @@ impl<T> AtomicOptionBox<T> {
     ///
     ///     let atomic_box = AtomicOptionBox::new(Some(Box::new(0)));
     ///
-    pub fn new(value: Option<Box<T>>) -> AtomicOptionBox<T> {
-        let abox = AtomicOptionBox {
-            ptr: AtomicPtr::new(null_mut()),
-        };
-        if let Some(box_value) = value {
-            abox.ptr.store(Box::into_raw(box_value), Ordering::Release);
+    pub fn new(value: OptionBox<T>) -> AtomicOptionBox<T> {
+        AtomicOptionBox {
+            base: AtomicBoxBase::new(value),
         }
-        abox
     }
 
     /// Atomically set this `AtomicOptionBox` to `other` and return the
@@ -68,10 +70,8 @@ impl<T> AtomicOptionBox<T> {
     ///     let prev_value = atom.swap(Some(Box::new("ok")), Ordering::AcqRel);
     ///     assert_eq!(prev_value, None);
     ///
-    pub fn swap(&self, other: Option<Box<T>>, order: Ordering) -> Option<Box<T>> {
-        let mut result = other;
-        self.swap_mut(&mut result, order);
-        result
+    pub fn swap(&self, other: OptionBox<T>, order: Ordering) -> OptionBox<T> {
+        self.base.swap(other, order)
     }
 
     /// Atomically set this `AtomicOptionBox` to `other` and drop the
@@ -95,10 +95,8 @@ impl<T> AtomicOptionBox<T> {
     ///     atom.store(Some(Box::new("ok")), Ordering::AcqRel);
     ///     assert_eq!(atom.into_inner(), Some(Box::new("ok")));
     ///
-    pub fn store(&self, other: Option<Box<T>>, order: Ordering) {
-        let mut result = other;
-        self.swap_mut(&mut result, order);
-        drop(result)
+    pub fn store(&self, other: OptionBox<T>, order: Ordering) {
+        self.base.store(other, order)
     }
 
     /// Atomically set this `AtomicOptionBox` to `None` and return the
@@ -125,8 +123,8 @@ impl<T> AtomicOptionBox<T> {
     ///     let prev_value = atom.take(Ordering::AcqRel);
     ///     assert!(prev_value.is_none());
     ///
-    pub fn take(&self, order: Ordering) -> Option<Box<T>> {
-        self.swap(None, order)
+    pub fn take(&self, order: Ordering) -> OptionBox<T> {
+        self.base.swap(None, order)
     }
 
     /// Atomically swaps the contents of this `AtomicOptionBox` with the contents of `other`.
@@ -151,17 +149,8 @@ impl<T> AtomicOptionBox<T> {
     ///     let prev_value = atom.swap_mut(&mut boxed, Ordering::AcqRel);
     ///     assert_eq!(boxed, None);
     ///
-    pub fn swap_mut(&self, other: &mut Option<Box<T>>, order: Ordering) {
-        match order {
-            Ordering::AcqRel | Ordering::SeqCst => {}
-            _ => panic!("invalid ordering for atomic swap"),
-        }
-
-        let new_ptr = into_ptr(unsafe { ptr::read(other) });
-        let old_ptr = self.ptr.swap(new_ptr, order);
-        unsafe {
-            ptr::write(other, from_ptr(old_ptr));
-        }
+    pub fn swap_mut(&self, other: &mut OptionBox<T>, order: Ordering) {
+        self.base.swap_mut(other, order)
     }
 
     /// Consume this `AtomicOptionBox`, returning the last option value it
@@ -174,10 +163,8 @@ impl<T> AtomicOptionBox<T> {
     ///     let atom = AtomicOptionBox::new(Some(Box::new("hello")));
     ///     assert_eq!(atom.into_inner(), Some(Box::new("hello")));
     ///
-    pub fn into_inner(self) -> Option<Box<T>> {
-        let last_ptr = self.ptr.load(Ordering::Acquire);
-        forget(self);
-        unsafe { from_ptr(last_ptr) }
+    pub fn into_inner(self) -> OptionBox<T> {
+        self.base.into_inner()
     }
 
     /// Returns a mutable reference to the contained value.
@@ -188,22 +175,11 @@ impl<T> AtomicOptionBox<T> {
     pub fn get_mut(&mut self) -> Option<&mut T> {
         // I have a convoluted theory that Relaxed is good enough here.
         // See comment in AtomicBox::get_mut().
-        let ptr = self.ptr.load(Ordering::Relaxed);
+        let ptr = self.base.ptr.load(Ordering::Relaxed);
         if ptr.is_null() {
             None
         } else {
-            Some(unsafe { &mut *ptr })
-        }
-    }
-}
-
-impl<T> Drop for AtomicOptionBox<T> {
-    /// Dropping an `AtomicOptionBox<T>` drops the final `Box<T>` value (if
-    /// any) stored in it.
-    fn drop(&mut self) {
-        let ptr = self.ptr.load(Ordering::Acquire);
-        unsafe {
-            from_ptr(ptr);
+            Some(unsafe { &mut *(ptr as *mut T) })
         }
     }
 }
@@ -219,7 +195,7 @@ impl<T> Debug for AtomicOptionBox<T> {
     /// The `{:?}` format of an `AtomicOptionBox<T>` looks like
     /// `"AtomicOptionBox(0x12341234)"` or `"AtomicOptionBox(None)"`.
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        let p = self.ptr.load(Ordering::Relaxed);
+        let p = self.base.ptr.load(Ordering::Relaxed);
         f.write_str("AtomicOptionBox(")?;
         if p.is_null() {
             f.write_str("None")?;

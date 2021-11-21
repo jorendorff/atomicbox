@@ -13,6 +13,30 @@ pub(crate) struct AtomicBoxBase<B: PointerConvertible> {
     pub(crate) ptr: AtomicPtr<B::Target>,
 }
 
+/// Opaque handle for the atomic box. This allows users to receive handles that
+/// represent the value of a box, without leaking pointers that are externally
+/// usable.
+#[derive(Debug, PartialEq)]
+pub struct Handle<T> {
+    pub(crate) ptr: *const T,
+}
+
+unsafe impl<T> Send for Handle<T> {}
+unsafe impl<T> Sync for Handle<T> {}
+impl<T> Copy for Handle<T> {}
+
+impl<T> Clone for Handle<T> {
+    fn clone(&self) -> Handle<T> {
+        *self
+    }
+}
+
+pub trait HandleReferable {
+    type Target;
+
+    fn make_handle(&self) -> Handle<Self::Target>;
+}
+
 impl<B: PointerConvertible> AtomicBoxBase<B> {
     pub fn new(value: B) -> AtomicBoxBase<B> {
         let ptr = B::into_raw(value);
@@ -52,8 +76,103 @@ impl<B: PointerConvertible> AtomicBoxBase<B> {
         unsafe { B::from_raw(last_ptr) }
     }
 
+    pub fn load_handle(&self, order: Ordering) -> Handle<B::Target> {
+        Handle {
+            ptr: self.load_pointer(order),
+        }
+    }
+
     pub fn load_pointer(&self, order: Ordering) -> *mut B::Target {
         self.ptr.load(order)
+    }
+
+    pub fn compare_exchange(
+        &self,
+        current: Handle<B::Target>,
+        new: B,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<B, (Handle<B::Target>, B)> {
+        let mut local_new = new;
+        let result = self.compare_exchange_mut(current, &mut local_new, success, failure);
+
+        match result {
+            Ok(_) => Ok(local_new),
+            Err(previous_ptr) => Err((previous_ptr, local_new)),
+        }
+    }
+
+    pub fn compare_exchange_mut(
+        &self,
+        current: Handle<B::Target>,
+        new: &mut B,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Handle<B::Target>, Handle<B::Target>> {
+        let new_ptr = B::into_raw(unsafe { ptr::read(new) });
+        let result =
+            self.ptr
+                .compare_exchange(current.ptr as *mut B::Target, new_ptr, success, failure);
+
+        match result {
+            Ok(previous_ptr) => {
+                unsafe {
+                    ptr::write(new, B::from_raw(previous_ptr));
+                }
+                Ok(Handle {
+                    ptr: previous_ptr as *const B::Target,
+                })
+            }
+            Err(previous_ptr) => Err(Handle {
+                ptr: previous_ptr as *const B::Target,
+            }),
+        }
+    }
+
+    pub fn compare_exchange_weak(
+        &self,
+        current: Handle<B::Target>,
+        new: B,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<B, (Handle<B::Target>, B)> {
+        let mut local_new = new;
+        let result = self.compare_exchange_weak_mut(current, &mut local_new, success, failure);
+
+        match result {
+            Ok(_) => Ok(local_new),
+            Err(previous_ptr) => Err((previous_ptr, local_new)),
+        }
+    }
+
+    pub fn compare_exchange_weak_mut(
+        &self,
+        current: Handle<B::Target>,
+        new: &mut B,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Handle<B::Target>, Handle<B::Target>> {
+        let new_ptr = B::into_raw(unsafe { ptr::read(new) });
+        let result = self.ptr.compare_exchange_weak(
+            current.ptr as *mut B::Target,
+            new_ptr,
+            success,
+            failure,
+        );
+
+        match result {
+            Ok(previous_ptr) => {
+                unsafe {
+                    ptr::write(new, B::from_raw(previous_ptr));
+                }
+                Ok(Handle {
+                    ptr: previous_ptr as *const B::Target,
+                })
+            }
+            Err(previous_ptr) => Err(Handle {
+                ptr: previous_ptr as *const B::Target,
+            }),
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use atomic_box_base::{AtomicBoxBase, PointerConvertible};
+use atomic_box_base::{AtomicBoxBase, Handle, HandleReferable, PointerConvertible};
 use std::fmt::{self, Debug, Formatter};
 use std::sync::atomic::Ordering;
 
@@ -11,6 +11,16 @@ impl<T> PointerConvertible for Box<T> {
 
     unsafe fn from_raw(raw: *mut T) -> Self {
         Box::from_raw(raw)
+    }
+}
+
+impl<T> HandleReferable for Box<T> {
+    type Target = T;
+
+    fn make_handle(&self) -> Handle<T> {
+        Handle {
+            ptr: &**self as *const T,
+        }
     }
 }
 
@@ -140,6 +150,221 @@ impl<T> AtomicBox<T> {
         let ptr = self.base.ptr.load(Ordering::Relaxed);
         unsafe { &mut *(ptr as *mut T) }
     }
+
+    /// Returns a handle that matches the currently held box.
+    ///
+    /// `load_handle` takes an [`Ordering`] argument which describes the memory ordering
+    /// of this operation. Possible values are [`SeqCst`], [`Acquire`] and [`Relaxed`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `order` is [`Release`] or [`AcqRel`].
+    pub fn load_handle(&self, order: Ordering) -> Handle<T> {
+        self.base.load_handle(order)
+    }
+
+    /// Returns a pointer to the currently held box.
+    ///
+    /// Using the pointer is unsafe for all of the usual reasons; e.g., the box might
+    /// have been dropped by another thread by the time the pointer is dereferenced.
+    ///
+    /// `load_pointer` takes an [`Ordering`] argument which describes the memory ordering
+    /// of this operation. Possible values are [`SeqCst`], [`Acquire`] and [`Relaxed`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `order` is [`Release`] or [`AcqRel`].
+    ///
+    /// # Examples
+    ///
+    ///     use atomicbox::AtomicBox;
+    ///     use std::sync::atomic::Ordering;
+    ///
+    ///     let mut box1 = Box::new("goodbye");
+    ///     let atom = AtomicBox::new(Box::new("hello"));
+    ///     let ptr = &mut *box1 as *mut &str;
+    ///
+    ///     atom.store(box1, Ordering::SeqCst);
+    ///     assert_eq!(atom.load_pointer(Ordering::Relaxed), ptr);
+    ///
+    pub fn load_pointer(&self, order: Ordering) -> *mut T {
+        self.base.load_pointer(order)
+    }
+
+    /// Stores `new` into this `AtomicBox` if the currently held value matches the `current` handle.
+    ///
+    /// The return value is a result indicating whether `new` was written and containing
+    /// the previous value. On success the returned handle is guaranteed to match the current value.
+    /// On failure the returned value contains the handle that matches the value in this `AtomicBox`
+    /// and the given `new`.
+    ///
+    /// `compare_exchange` takes two [`Ordering`] arguments to describe the memory
+    /// ordering of this operation. `success` describes the required ordering for the
+    /// read-modify-write operation that takes place if the comparison with `current` succeeds.
+    /// `failure` describes the required ordering for the load operation that takes place when
+    /// the comparison fails. Using [`Acquire`] as success ordering makes the store part
+    /// of this operation [`Relaxed`], and using [`Release`] makes the successful load
+    /// [`Relaxed`]. The failure ordering can only be [`SeqCst`], [`Acquire`] or [`Relaxed`]
+    /// and must be equivalent to or weaker than the success ordering.
+    ///
+    /// **Note:** This method is only available on platforms that support atomic
+    /// operations on pointers.
+    ///
+    /// # Examples
+    ///
+    ///     use atomicbox::AtomicBox;
+    ///     use std::sync::atomic::Ordering;
+    ///
+    ///     let atom = AtomicBox::new(Box::new("hello"));
+    ///     let box1 = Box::new("goodbye");
+    ///     let current = atom.load_handle(Ordering::Relaxed);
+    ///     let result = atom.compare_exchange(current, box1, Ordering::SeqCst, Ordering::Relaxed);
+    ///     assert_eq!(result, Ok(Box::new("hello")));
+    ///
+    pub fn compare_exchange(
+        &self,
+        current: Handle<T>,
+        new: Box<T>,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Box<T>, (Handle<T>, Box<T>)> {
+        self.base.compare_exchange(current, new, success, failure)
+    }
+
+    /// Automatically swaps the contents of this `AtomicBox` and the contents of `new` if the
+    /// currently held value matches the `current` handle.
+    ///
+    /// The return value is a result indicating whether `new` was written and containing
+    /// the previous value. On success the returned handle is guaranteed to match the current value.
+    /// On failure, the returned value contains the handle that matches the value in this
+    /// `AtomicBox`, and `new` isn't mutated.
+    ///
+    /// `compare_exchange_mut` takes two [`Ordering`] arguments to describe the memory
+    /// ordering of this operation. `success` describes the required ordering for the
+    /// read-modify-write operation that takes place if the comparison with `current` succeeds.
+    /// `failure` describes the required ordering for the load operation that takes place when
+    /// the comparison fails. Using [`Acquire`] as success ordering makes the store part
+    /// of this operation [`Relaxed`], and using [`Release`] makes the successful load
+    /// [`Relaxed`]. The failure ordering can only be [`SeqCst`], [`Acquire`] or [`Relaxed`]
+    /// and must be equivalent to or weaker than the success ordering.
+    ///
+    /// # Examples
+    ///
+    ///     use atomicbox::AtomicBox;
+    ///     use std::sync::atomic::Ordering;
+    ///
+    ///     let atom = AtomicBox::new(Box::new("hello"));
+    ///     let mut box1 = Box::new("goodbye");
+    ///     let current = atom.load_handle(Ordering::Relaxed);
+    ///     atom.compare_exchange_mut(current, &mut box1, Ordering::SeqCst, Ordering::Relaxed);
+    ///     assert_eq!(box1, Box::new("hello"));
+    ///
+    pub fn compare_exchange_mut(
+        &self,
+        current: Handle<T>,
+        new: &mut Box<T>,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Handle<T>, Handle<T>> {
+        self.base
+            .compare_exchange_mut(current, new, success, failure)
+    }
+
+    /// Stores `new` into this `AtomicBox` if the currently held value matches the `current` handle.
+    ///
+    /// Unlike [`AtomicBox::compare_exchange`], this function is allowed to spuriously fail even
+    /// when the comparison succeeds, which can result in more efficient code on some platforms.
+    /// The return value is a result indicating whether `new` was written and containing
+    /// the previous value. On success the returned handle is guaranteed to match the current value.
+    /// On failure the returned value contains the handle that matches the value in this `AtomicBox`
+    /// and the given `new`.
+    ///
+    /// `compare_exchange_weak` takes two [`Ordering`] arguments to describe the memory
+    /// ordering of this operation. `success` describes the required ordering for the
+    /// read-modify-write operation that takes place if the comparison with `current` succeeds.
+    /// `failure` describes the required ordering for the load operation that takes place when
+    /// the comparison fails. Using [`Acquire`] as success ordering makes the store part
+    /// of this operation [`Relaxed`], and using [`Release`] makes the successful load
+    /// [`Relaxed`]. The failure ordering can only be [`SeqCst`], [`Acquire`] or [`Relaxed`]
+    /// and must be equivalent to or weaker than the success ordering.
+    ///
+    /// **Note:** This method is only available on platforms that support atomic
+    /// operations on pointers.
+    ///
+    /// # Examples
+    ///
+    ///     use atomicbox::AtomicBox;
+    ///     use std::sync::atomic::Ordering;
+    ///
+    ///     let atom = AtomicBox::new(Box::new("hello"));
+    ///     let mut box1 = Box::new("goodbye");
+    ///     let mut current = atom.load_handle(Ordering::Relaxed);
+    ///     box1 = loop {
+    ///         match atom.compare_exchange_weak(current, box1, Ordering::SeqCst, Ordering::Relaxed) {
+    ///             Ok(b) => break b,
+    ///             Err((c, b)) => {
+    ///                 current = c;
+    ///                 box1 = b;
+    ///             }
+    ///         }
+    ///     };
+    ///
+    pub fn compare_exchange_weak(
+        &self,
+        current: Handle<T>,
+        new: Box<T>,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Box<T>, (Handle<T>, Box<T>)> {
+        self.base
+            .compare_exchange_weak(current, new, success, failure)
+    }
+
+    /// Automatically swaps the contents of this `AtomicBox` and the contents of `new` if the
+    /// currently held value matches the `current` handle.
+    ///
+    /// Unlike [`AtomicBox::compare_exchange_weak`], this function is allowed to spuriously fail
+    /// even when the comparison succeeds, which can result in more efficient code on some
+    /// platforms.
+    /// The return value is a result indicating whether `new` was written and containing
+    /// the previous value. On success the returned handle is guaranteed to match the current value.
+    /// On failure, the returned value contains the handle that matches the value in this
+    /// `AtomicBox`, and `new` isn't mutated.rulers
+    ///
+    /// `compare_exchange_weak_mut` takes two [`Ordering`] arguments to describe the memory
+    /// ordering of this operation. `success` describes the required ordering for the
+    /// read-modify-write operation that takes place if the comparison with `current` succeeds.
+    /// `failure` describes the required ordering for the load operation that takes place when
+    /// the comparison fails. Using [`Acquire`] as success ordering makes the store part
+    /// of this operation [`Relaxed`], and using [`Release`] makes the successful load
+    /// [`Relaxed`]. The failure ordering can only be [`SeqCst`], [`Acquire`] or [`Relaxed`]
+    /// and must be equivalent to or weaker than the success ordering.
+    ///
+    /// # Examples
+    ///
+    ///     use atomicbox::AtomicBox;
+    ///     use std::sync::atomic::Ordering;
+    ///
+    ///     let atom = AtomicBox::new(Box::new("hello"));
+    ///     let mut box1 = Box::new("goodbye");
+    ///     let mut current = atom.load_handle(Ordering::Relaxed);
+    ///     loop {
+    ///         match atom.compare_exchange_weak_mut(current, &mut box1, Ordering::SeqCst, Ordering::Relaxed) {
+    ///             Ok(_) => break,
+    ///             Err(c) => current = c,
+    ///         }
+    ///     }
+    ///
+    pub fn compare_exchange_weak_mut(
+        &self,
+        current: Handle<T>,
+        new: &mut Box<T>,
+        success: Ordering,
+        failure: Ordering,
+    ) -> Result<Handle<T>, Handle<T>> {
+        self.base
+            .compare_exchange_weak_mut(current, new, success, failure)
+    }
 }
 
 impl<T> Default for AtomicBox<T>
@@ -175,6 +400,111 @@ mod tests {
         let bis = Box::new("bis");
         assert_eq!(b.swap(bis, Ordering::AcqRel), Box::new("hello world"));
         assert_eq!(b.swap(Box::new(""), Ordering::AcqRel), Box::new("bis"));
+    }
+
+    #[test]
+    fn atomic_box_load_handle_works() {
+        let box1 = Box::new("hello world");
+        let handle1 = box1.make_handle();
+        let b = AtomicBox::new(box1);
+        let handle2 = b.load_handle(Ordering::Relaxed);
+        assert_eq!(handle1, handle2);
+    }
+
+    #[test]
+    fn atomic_box_compare_exchange_mut_works() {
+        let box1 = Box::new("box1");
+        let handle1 = box1.make_handle();
+        let mut box2 = Box::new("box2");
+        let handle2 = box2.make_handle();
+        let atom = AtomicBox::new(box1);
+
+        let ok_result =
+            atom.compare_exchange_mut(handle1, &mut box2, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(box2, Box::new("box1"));
+        assert_eq!(ok_result, Ok(handle1));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+
+        let err_result =
+            atom.compare_exchange_mut(handle1, &mut box2, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(box2, Box::new("box1"));
+        assert_eq!(err_result, Err(handle2));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+    }
+
+    #[test]
+    fn atomic_box_compare_exchange_works() {
+        let box1 = Box::new("box1");
+        let handle1 = box1.make_handle();
+        let box2 = Box::new("box2");
+        let handle2 = box2.make_handle();
+        let atom = AtomicBox::new(box1);
+
+        let ok_result = atom.compare_exchange(handle1, box2, Ordering::AcqRel, Ordering::Acquire);
+        let ok_result_box = ok_result.unwrap();
+        assert_eq!(ok_result_box, Box::new("box1"));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+
+        let err_result =
+            atom.compare_exchange(handle1, ok_result_box, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(err_result, Err((handle2, Box::new("box1"))));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+    }
+
+    #[test]
+    fn atomic_box_compare_exchange_weak_mut_works() {
+        let box1 = Box::new("box1");
+        let handle1 = box1.make_handle();
+        let mut box2 = Box::new("box2");
+        let handle2 = box2.make_handle();
+        let atom = AtomicBox::new(box1);
+
+        let ok_result = loop {
+            let result = atom.compare_exchange_weak_mut(
+                handle1,
+                &mut box2,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            );
+            if result.is_ok() {
+                break result;
+            }
+        };
+        assert_eq!(box2, Box::new("box1"));
+        assert_eq!(ok_result, Ok(handle1));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+
+        let err_result =
+            atom.compare_exchange_weak_mut(handle1, &mut box2, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(box2, Box::new("box1"));
+        assert_eq!(err_result, Err(handle2));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+    }
+
+    #[test]
+    fn atomic_box_compare_exchange_weak_works() {
+        let box1 = Box::new("box1");
+        let handle1 = box1.make_handle();
+        let mut box2 = Box::new("box2");
+        let handle2 = box2.make_handle();
+        let atom = AtomicBox::new(box1);
+
+        let old_box = loop {
+            let result =
+                atom.compare_exchange_weak(handle1, box2, Ordering::SeqCst, Ordering::Relaxed);
+            match result {
+                Ok(b) => break b,
+                Err((_, b)) => box2 = b,
+            }
+        };
+
+        assert_eq!(old_box, Box::new("box1"));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
+
+        let err_result =
+            atom.compare_exchange_weak(handle1, old_box, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(err_result, Err((handle2, Box::new("box1"))));
+        assert_eq!(atom.load_handle(Ordering::Relaxed), handle2);
     }
 
     #[test]
@@ -269,6 +599,57 @@ mod tests {
 
         // Don't forget the data still in `abox`!
         // There are NTHREADS+1 vectors in all.
+        for val in *abox.swap(Box::new(vec![]), Ordering::AcqRel) {
+            counts[val as usize] += 1;
+        }
+
+        println!("{:?}", counts);
+        for t in 0..NTHREADS {
+            assert_eq!(counts[t], 100);
+        }
+    }
+
+    #[test]
+    fn atomic_threads_exchange() {
+        const NTHREADS: usize = 9;
+
+        let gate = Arc::new(Barrier::new(NTHREADS));
+        let abox: Arc<AtomicBox<Vec<u8>>> = Arc::new(Default::default());
+        let shared_box_handle = abox.load_handle(Ordering::Relaxed);
+        let handles: Vec<_> = (0..NTHREADS as u8)
+            .map(|t| {
+                let my_gate = gate.clone();
+                let my_box = abox.clone();
+                spawn(move || {
+                    println!("{:?}", t);
+                    my_gate.wait();
+                    let mut my_vec = Box::new(vec![]);
+                    for _ in 0..100 {
+                        loop {
+                            let result = my_box.compare_exchange_weak_mut(
+                                shared_box_handle,
+                                &mut my_vec,
+                                Ordering::SeqCst,
+                                Ordering::Relaxed,
+                            );
+                            if result.is_ok() {
+                                break;
+                            }
+                        }
+                        my_vec.push(t);
+
+                        my_vec = my_box.swap(my_vec, Ordering::AcqRel);
+                    }
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        let mut counts = [0usize; NTHREADS];
+
         for val in *abox.swap(Box::new(vec![]), Ordering::AcqRel) {
             counts[val as usize] += 1;
         }

@@ -4,6 +4,7 @@ edition = "2021"
 description = "Safe atomic pointers to boxed data."
 version = "0.3.0"
 authors = ["Jason Orendorff <jason.orendorff@gmail.com>"]
+categories = ["concurrency", "no-std"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/jorendorff/atomicbox"

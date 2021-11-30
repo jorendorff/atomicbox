@@ -31,12 +31,12 @@ impl<T> AtomicBox<T> {
     /// any values.  `other` is moved into `self`; the value previously in
     /// `self` is returned.
     ///
-    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
     /// as other values would not be safe if `T` contains any data.
     ///
     /// # Panics
     ///
-    /// Panics if `ordering` is not one of the two allowed values.
+    /// Panics if `order` is not one of the two allowed values.
     ///
     /// # Examples
     ///
@@ -57,12 +57,12 @@ impl<T> AtomicBox<T> {
     ///
     /// The `AtomicBox` takes ownership of `other`.
     ///
-    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
     /// as other values would not be safe if `T` contains any data.
     ///
     /// # Panics
     ///
-    /// Panics if `ordering` is not one of the two allowed values.
+    /// Panics if `order` is not one of the two allowed values.
     ///
     /// # Examples
     ///
@@ -84,12 +84,12 @@ impl<T> AtomicBox<T> {
     /// This does not allocate or free memory, and it neither clones nor drops
     /// any values. The pointers in `*other` and `self` are simply exchanged.
     ///
-    /// `ordering` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
+    /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
     /// as other values would not be safe if `T` contains any data.
     ///
     /// # Panics
     ///
-    /// Panics if `ordering` is not one of the two allowed values.
+    /// Panics if `order` is not one of the two allowed values.
     ///
     /// # Examples
     ///

@@ -167,6 +167,8 @@ where
 
 impl<T> Debug for AtomicBox<T> {
     /// The `{:?}` format of an `AtomicBox<T>` looks like `"AtomicBox(0x12341234)"`.
+    /// The address is the address of the `Box` allocation, not the address of
+    /// the `AtomicBox`.
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         let p = self.ptr.load(Ordering::Relaxed);
         f.write_str("AtomicBox(")?;

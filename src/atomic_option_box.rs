@@ -210,6 +210,9 @@ impl<T> Default for AtomicOptionBox<T> {
 impl<T> Debug for AtomicOptionBox<T> {
     /// The `{:?}` format of an `AtomicOptionBox<T>` looks like
     /// `"AtomicOptionBox(0x12341234)"` or `"AtomicOptionBox(None)"`.
+    ///
+    /// The address is the address of the `Box` allocation, if any, not the
+    /// address of the `AtomicOptionBox`.
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         let p = self.ptr.load(Ordering::Relaxed);
         f.write_str("AtomicOptionBox(")?;

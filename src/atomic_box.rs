@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use core::fmt::{self, Debug, Formatter};
 use core::mem::forget;
-use core::ptr::{self, null_mut};
+use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
 
 /// A type that holds a single `Box<T>` value and can be safely shared between
@@ -20,11 +20,9 @@ impl<T> AtomicBox<T> {
     ///     let atomic_box = AtomicBox::new(Box::new(0));
     ///
     pub fn new(value: Box<T>) -> AtomicBox<T> {
-        let abox = AtomicBox {
-            ptr: AtomicPtr::new(null_mut()),
-        };
-        abox.ptr.store(Box::into_raw(value), Ordering::Release);
-        abox
+        AtomicBox {
+            ptr: AtomicPtr::new(Box::into_raw(value)),
+        }
     }
 
     /// Atomically set this `AtomicBox` to `other` and return the previous value.

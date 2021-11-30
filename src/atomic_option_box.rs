@@ -37,13 +37,9 @@ impl<T> AtomicOptionBox<T> {
     ///     let atomic_box = AtomicOptionBox::new(Some(Box::new(0)));
     ///
     pub fn new(value: Option<Box<T>>) -> AtomicOptionBox<T> {
-        let abox = AtomicOptionBox {
-            ptr: AtomicPtr::new(null_mut()),
-        };
-        if let Some(box_value) = value {
-            abox.ptr.store(Box::into_raw(box_value), Ordering::Release);
+        AtomicOptionBox {
+            ptr: AtomicPtr::new(into_ptr(value)),
         }
-        abox
     }
 
     /// Atomically set this `AtomicOptionBox` to `other` and return the

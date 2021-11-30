@@ -18,26 +18,13 @@ so here it is!
 
 ### Why no `Deref`?
 
-The reason it's safe for a normal `Box` to implement `Deref` is apparent
-from the `deref` method's signature:
+It wouldn't be safe. The point of an `AtomicBox` is that other threads can
+obtain the boxed value, take ownership of it, even drop it, all without
+taking a lock. So there is no safe way to borrow that value—except to swap
+it out of the `AtomicBox` yourself.
 
-```rust
-fn deref(&self) -> &Self::Target;
-```
-
-Dereferencing a box returns a reference, call it `r`, whose lifetime is
-enclosed by the lifetime of `&self`, the borrow of the box itself. Since the
-box is borrowed by a shared reference, nobody can change the box's value
-while it exists. This ensures that `r` remains valid throughout its
-lifetime.
-
-But the point of an atomic type is that it permits mutation even while
-borrowed by a shared reference. So the fact that you've got a shared
-reference to an atomic box doesn't mean nobody will store some new pointer
-in it and free the old one you're borrowing.
-
-This is the same reason you can't borrow a reference to the contents of any
-other atomic type. The only difference here is that those contents happen to
-be on the heap.
+This is pretty much the same reason you can't borrow a reference to the
+contents of any other atomic type. It would invite data races. The only
+difference here is that those contents happen to be on the heap.
 
 License: MIT/Apache-2.0

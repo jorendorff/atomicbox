@@ -44,7 +44,7 @@ impl<T> AtomicOptionBox<T> {
 
     /// Creates a new `AtomicOptionBox` with no value.
     ///
-    /// Equivalent to `AtomicOptionBox::new(None)`, but can be used in const
+    /// Equivalent to `AtomicOptionBox::new(None)`, but can be used in `const`
     /// context.
     ///
     /// # Examples

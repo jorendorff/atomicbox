@@ -148,9 +148,9 @@ impl<T> AtomicBox<T> {
 impl<T> Drop for AtomicBox<T> {
     /// Dropping an `AtomicBox<T>` drops the final `Box<T>` value stored in it.
     fn drop(&mut self) {
-        let ptr = self.ptr.load(Ordering::Acquire);
+        let last_ptr = self.ptr.load(Ordering::Acquire);
         unsafe {
-            Box::from_raw(ptr);
+            Box::from_raw(last_ptr);
         }
     }
 }

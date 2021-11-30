@@ -196,9 +196,9 @@ impl<T> Drop for AtomicOptionBox<T> {
     /// Dropping an `AtomicOptionBox<T>` drops the final `Box<T>` value (if
     /// any) stored in it.
     fn drop(&mut self) {
-        let ptr = self.ptr.load(Ordering::Acquire);
+        let last_ptr = self.ptr.load(Ordering::Acquire);
         unsafe {
-            from_ptr(ptr);
+            from_ptr(last_ptr);
         }
     }
 }

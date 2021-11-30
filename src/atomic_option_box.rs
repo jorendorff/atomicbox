@@ -307,7 +307,7 @@ mod tests {
             drop(first);
             assert_eq!(n.load(Ordering::Relaxed), 5);
             let second = ab.swap(Some(Box::new(K(n.clone(), 13))), Ordering::AcqRel);
-            assert_eq!(second.is_none(), true);
+            assert!(second.is_none());
             assert_eq!(n.load(Ordering::Relaxed), 5);
         }
         assert_eq!(n.load(Ordering::Relaxed), 5 + 13);

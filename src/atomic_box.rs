@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use core::fmt::{self, Debug, Formatter};
+use core::marker::PhantomData;
 use core::mem::forget;
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
@@ -8,7 +9,18 @@ use core::sync::atomic::{AtomicPtr, Ordering};
 /// threads.
 pub struct AtomicBox<T> {
     ptr: AtomicPtr<T>,
+
+    /// This effectively makes `AtomicBox<T>` non-`Send` and non-`Sync` if `T`
+    /// is non-`Send`.
+    phantom: PhantomData<Box<T>>,
 }
+
+/// Mark `AtomicBox<T>` as safe to share across threads.
+///
+/// This is safe because shared access to an `AtomicBox<T>` does not provide
+/// shared access to any `T` value. However, it does provide the ability to get
+/// a `Box<T>` from another thread, so `T: Send` is required.
+unsafe impl<T> Sync for AtomicBox<T> where T: Send {}
 
 impl<T> AtomicBox<T> {
     /// Creates a new `AtomicBox` with the given value.
@@ -22,6 +34,7 @@ impl<T> AtomicBox<T> {
     pub fn new(value: Box<T>) -> AtomicBox<T> {
         AtomicBox {
             ptr: AtomicPtr::new(Box::into_raw(value)),
+            phantom: PhantomData,
         }
     }
 

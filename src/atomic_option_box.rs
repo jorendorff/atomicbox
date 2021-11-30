@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use core::fmt::{self, Debug, Formatter};
+use core::marker::PhantomData;
 use core::mem::forget;
 use core::ptr::null_mut;
 use core::sync::atomic::{AtomicPtr, Ordering};
@@ -10,7 +11,18 @@ pub struct AtomicOptionBox<T> {
     /// Pointer to a `T` value in the heap, representing `Some(t)`;
     /// or a null pointer for `None`.
     ptr: AtomicPtr<T>,
+
+    /// This effectively makes `AtomicOptionBox<T>` non-`Send` and non-`Sync`
+    /// if `T` is non-`Send`.
+    phantom: PhantomData<Box<T>>,
 }
+
+/// Mark `AtomicOptionBox<T>` as safe to share across threads.
+///
+/// This is safe because shared access to an `AtomicOptionBox<T>` does not
+/// provide shared access to any `T` value. However, it does provide the
+/// ability to get a `Box<T>` from another thread, so `T: Send` is required.
+unsafe impl<T> Sync for AtomicOptionBox<T> where T: Send {}
 
 fn into_ptr<T>(value: Option<Box<T>>) -> *mut T {
     match value {
@@ -39,6 +51,7 @@ impl<T> AtomicOptionBox<T> {
     pub fn new(value: Option<Box<T>>) -> AtomicOptionBox<T> {
         AtomicOptionBox {
             ptr: AtomicPtr::new(into_ptr(value)),
+            phantom: PhantomData,
         }
     }
 
@@ -56,6 +69,7 @@ impl<T> AtomicOptionBox<T> {
     pub const fn none() -> Self {
         Self {
             ptr: AtomicPtr::new(null_mut()),
+            phantom: PhantomData,
         }
     }
 

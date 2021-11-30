@@ -289,19 +289,19 @@ mod tests {
     #[test]
     fn atomic_option_box_pointer_identity() {
         let box1 = Box::new(1);
-        let p1 = format!("{:p}", box1);
+        let p1 = &*box1 as *const i32;
         let atom = AtomicOptionBox::new(Some(box1));
 
         let box2 = Box::new(2);
-        let p2 = format!("{:p}", box2);
-        assert!(p2 != p1);
+        let p2 = &*box2 as *const i32;
+        assert_ne!(p2, p1);
 
         let box3 = atom.swap(Some(box2), Ordering::AcqRel).unwrap(); // box1 out, box2 in
-        let p3 = format!("{:p}", box3);
+        let p3 = &*box3 as *const i32;
         assert_eq!(p3, p1); // box3 is box1
 
         let box4 = atom.swap(None, Ordering::AcqRel).unwrap(); // box2 out, None in
-        let p4 = format!("{:p}", box4);
+        let p4 = &*box4 as *const i32;
         assert_eq!(p4, p2); // box4 is box2
     }
 

@@ -291,8 +291,8 @@ mod tests {
         }
 
         println!("{:?}", counts);
-        for t in 0..NTHREADS {
-            assert_eq!(counts[t], 100);
+        for count in counts {
+            assert_eq!(count, 100);
         }
     }
 

@@ -74,9 +74,7 @@ impl<T> AtomicBox<T> {
     ///     assert_eq!(atom.into_inner(), Box::new("two"));
     ///
     pub fn store(&self, other: Box<T>, order: Ordering) {
-        let mut result = other;
-        self.swap_mut(&mut result, order);
-        drop(result)
+        self.swap(other, order);
     }
 
     /// Atomically swaps the contents of this `AtomicBox` with the contents of `other`.

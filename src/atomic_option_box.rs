@@ -93,9 +93,7 @@ impl<T> AtomicOptionBox<T> {
     ///     assert_eq!(atom.into_inner(), Some(Box::new("ok")));
     ///
     pub fn store(&self, other: Option<Box<T>>, order: Ordering) {
-        let mut result = other;
-        self.swap_mut(&mut result, order);
-        drop(result)
+        self.swap(other, order);
     }
 
     /// Atomically set this `AtomicOptionBox` to `None` and return the

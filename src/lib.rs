@@ -1,4 +1,9 @@
-//! Safe atomic boxes.
+//! **Safe atomic boxes.**
+//!
+//! [![Documentation](https://docs.rs/atomicbox/badge.svg)](https://docs.rs/atomicbox)
+//! [![](https://img.shields.io/crates/v/atomicbox.svg)](https://crates.io/crates/atomicbox)
+//! [![](https://img.shields.io/crates/d/atomicbox.svg)](https://crates.io/crates/atomicbox)
+//! [![Build Status](https://github.com/jorendorff/atomicbox/workflows/ci/badge.svg)](https://github.com/jorendorff/atomicbox/actions?query=workflow%3Aci)
 //!
 //! This crate provides `AtomicBox<T>` and `AtomicOptionBox<T>` types: safe, owning
 //! versions of the standard library's `AtomicPtr`.

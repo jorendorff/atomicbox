@@ -9,6 +9,3 @@ readme = "README.md"
 repository = "https://github.com/jorendorff/atomicbox"
 
 [dependencies]
-
-[badges]
-travis-ci = { repository = "jorendorff/atomicbox" }

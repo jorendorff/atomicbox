@@ -1,4 +1,11 @@
-# AtomicBox - Safe atomic boxes for Rust.
+# atomicbox
+
+**Safe atomic boxes.**
+
+[![Documentation](https://docs.rs/atomicbox/badge.svg)](https://docs.rs/atomicbox)
+[![](https://img.shields.io/crates/v/atomicbox.svg)](https://crates.io/crates/atomicbox)
+[![](https://img.shields.io/crates/d/atomicbox.svg)](https://crates.io/crates/atomicbox)
+[![Build Status](https://github.com/jorendorff/atomicbox/workflows/ci/badge.svg)](https://github.com/jorendorff/atomicbox/actions?query=workflow%3Aci)
 
 This crate provides `AtomicBox<T>` and `AtomicOptionBox<T>` types: safe, owning
 versions of the standard library's `AtomicPtr`.
@@ -9,12 +16,12 @@ Imagine a `Box` without `Deref` or `DerefMut` implementations, and you'll
 get the idea. Still, this is sufficient for some lock-free data structures,
 so here it is!
 
-## Why no `Deref`?
+### Why no `Deref`?
 
 The reason it's safe for a normal `Box` to implement `Deref` is apparent
 from the `deref` method's signature:
 
-```ignore
+```rust
 fn deref(&self) -> &Self::Target;
 ```
 
@@ -33,10 +40,4 @@ This is the same reason you can't borrow a reference to the contents of any
 other atomic type. The only difference here is that those contents happen to
 be on the heap.
 
-## License
-
-AtomicBox is distributed under the terms of both the MIT license and the
-Apache License (Version 2.0).
-
-See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT), and
-[COPYRIGHT](COPYRIGHT) for details.
+License: MIT/Apache-2.0

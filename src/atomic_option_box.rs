@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use core::fmt::{self, Debug, Formatter};
 use core::mem::forget;
-use core::ptr::{self, null_mut};
+use core::ptr::null_mut;
 use core::sync::atomic::{AtomicPtr, Ordering};
 
 /// A type that holds a single `Option<Box<T>>` value and can be safely shared
@@ -66,9 +66,14 @@ impl<T> AtomicOptionBox<T> {
     ///     assert_eq!(prev_value, None);
     ///
     pub fn swap(&self, other: Option<Box<T>>, order: Ordering) -> Option<Box<T>> {
-        let mut result = other;
-        self.swap_mut(&mut result, order);
-        result
+        match order {
+            Ordering::AcqRel | Ordering::SeqCst => {}
+            _ => panic!("invalid ordering for atomic swap"),
+        }
+
+        let new_ptr = into_ptr(other);
+        let old_ptr = self.ptr.swap(new_ptr, order);
+        unsafe { from_ptr(old_ptr) }
     }
 
     /// Atomically set this `AtomicOptionBox` to `other` and drop the
@@ -147,16 +152,8 @@ impl<T> AtomicOptionBox<T> {
     ///     assert_eq!(boxed, None);
     ///
     pub fn swap_mut(&self, other: &mut Option<Box<T>>, order: Ordering) {
-        match order {
-            Ordering::AcqRel | Ordering::SeqCst => {}
-            _ => panic!("invalid ordering for atomic swap"),
-        }
-
-        let new_ptr = into_ptr(unsafe { ptr::read(other) });
-        let old_ptr = self.ptr.swap(new_ptr, order);
-        unsafe {
-            ptr::write(other, from_ptr(old_ptr));
-        }
+        let previous = self.swap(other.take(), order);
+        *other = previous;
     }
 
     /// Consume this `AtomicOptionBox`, returning the last option value it

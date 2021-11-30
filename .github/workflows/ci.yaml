@@ -1,0 +1,16 @@
+name: CI
+
+on: [push, pull_request]
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Check README.md is up to date
+      run: cargo install cargo-readme && cargo readme > README.md && git diff --quiet

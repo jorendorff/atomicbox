@@ -81,11 +81,13 @@ impl<T> AtomicOptionBox<T> {
     /// `self` is returned.
     ///
     /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
-    /// as other values would not be safe if `T` contains any data.
+    /// as other values would not be safe if `T` contains any data. In
+    /// the case when `other` is `None`, `order` may also be
+    /// `Ordering::Acquire`.
     ///
     /// # Panics
     ///
-    /// Panics if `order` is not one of the two allowed values.
+    /// Panics if `order` is not one of the allowed values.
     ///
     /// # Examples
     ///
@@ -96,9 +98,13 @@ impl<T> AtomicOptionBox<T> {
     ///     let prev_value = atom.swap(Some(Box::new("ok")), Ordering::AcqRel);
     ///     assert_eq!(prev_value, None);
     ///
+    ///     let prev_value = atom.swap(None, Ordering::Acquire);
+    ///     assert_eq!(prev_value, Some(Box::new("ok")));
+    ///
     pub fn swap(&self, other: Option<Box<T>>, order: Ordering) -> Option<Box<T>> {
-        match order {
-            Ordering::AcqRel | Ordering::SeqCst => {}
+        match (&other, order) {
+            (None, Ordering::Acquire | Ordering::AcqRel | Ordering::SeqCst) => {}
+            (Some(_), Ordering::AcqRel | Ordering::SeqCst) => {}
             _ => panic!("invalid ordering for atomic swap"),
         }
 
@@ -113,11 +119,13 @@ impl<T> AtomicOptionBox<T> {
     /// The `AtomicOptionBox` takes ownership of `other`.
     ///
     /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
-    /// as other values would not be safe if `T` contains any data.
+    /// as other values would not be safe if `T` contains any data. In
+    /// the case when `other` is `None`, `order` may also be
+    /// `Ordering::Acquire`.
     ///
     /// # Panics
     ///
-    /// Panics if `order` is not one of the two allowed values.
+    /// Panics if `order` is not one of the allowed values.
     ///
     /// # Examples
     ///
@@ -138,12 +146,13 @@ impl<T> AtomicOptionBox<T> {
     /// This does not allocate or free memory, and it neither clones nor drops
     /// any values. It is equivalent to calling `self.swap(None, order)`
     ///
-    /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
-    /// as other values would not be safe if `T` contains any data.
+    /// `order` must be either `Ordering::Acquire`, `Ordering::AcqRel` or
+    /// `Ordering::SeqCst`, as other values would not be safe if `T` contains
+    /// any data.
     ///
     /// # Panics
     ///
-    /// Panics if `order` is not one of the two allowed values.
+    /// Panics if `order` is not one of the allowed values.
     ///
     /// # Examples
     ///
@@ -151,9 +160,9 @@ impl<T> AtomicOptionBox<T> {
     ///     use atomicbox::AtomicOptionBox;
     ///
     ///     let atom = AtomicOptionBox::new(Some(Box::new("ok")));
-    ///     let prev_value = atom.take(Ordering::AcqRel);
+    ///     let prev_value = atom.take(Ordering::Acquire);
     ///     assert!(prev_value.is_some());
-    ///     let prev_value = atom.take(Ordering::AcqRel);
+    ///     let prev_value = atom.take(Ordering::Acquire);
     ///     assert!(prev_value.is_none());
     ///
     pub fn take(&self, order: Ordering) -> Option<Box<T>> {
@@ -166,11 +175,13 @@ impl<T> AtomicOptionBox<T> {
     /// any values. The pointers in `*other` and `self` are simply exchanged.
     ///
     /// `order` must be either `Ordering::AcqRel` or `Ordering::SeqCst`,
-    /// as other values would not be safe if `T` contains any data.
+    /// as other values would not be safe if `T` contains any data. In
+    /// the case when `*other` is `None`, `order` may also be
+    /// `Ordering::Acquire`.
     ///
     /// # Panics
     ///
-    /// Panics if `order` is not one of the two allowed values.
+    /// Panics if `order` is not one of the allowed values.
     ///
     /// # Examples
     ///
@@ -272,13 +283,13 @@ mod tests {
             Some(Box::new("hello world"))
         );
         assert_eq!(b.swap(Some(bis), Ordering::AcqRel), None);
-        assert_eq!(b.swap(None, Ordering::AcqRel), Some(Box::new("bis")));
+        assert_eq!(b.swap(None, Ordering::Acquire), Some(Box::new("bis")));
     }
 
     #[test]
     fn atomic_option_box_store_works() {
         let b = AtomicOptionBox::new(Some(Box::new("hello world")));
-        b.store(None, Ordering::AcqRel);
+        b.store(None, Ordering::Acquire);
         assert_eq!(b.into_inner(), None);
 
         let b = AtomicOptionBox::new(Some(Box::new("hello world")));
@@ -291,12 +302,12 @@ mod tests {
     fn atomic_option_box_swap_mut_works() {
         let b = AtomicOptionBox::new(Some(Box::new("hello world")));
         let mut bis = None;
-        b.swap_mut(&mut bis, Ordering::AcqRel);
+        b.swap_mut(&mut bis, Ordering::Acquire);
         assert_eq!(bis, Some(Box::new("hello world")));
         bis = Some(Box::new("bis"));
         b.swap_mut(&mut bis, Ordering::AcqRel);
         assert_eq!(bis, None);
-        b.swap_mut(&mut bis, Ordering::AcqRel);
+        b.swap_mut(&mut bis, Ordering::Acquire);
         assert_eq!(bis, Some(Box::new("bis")));
     }
 
@@ -314,7 +325,7 @@ mod tests {
         let p3 = &*box3 as *const i32;
         assert_eq!(p3, p1); // box3 is box1
 
-        let box4 = atom.swap(None, Ordering::AcqRel).unwrap(); // box2 out, None in
+        let box4 = atom.swap(None, Ordering::Acquire).unwrap(); // box2 out, None in
         let p4 = &*box4 as *const i32;
         assert_eq!(p4, p2); // box4 is box2
     }
@@ -336,7 +347,7 @@ mod tests {
         {
             let ab = AtomicOptionBox::new(Some(Box::new(K(n.clone(), 5))));
             assert_eq!(n.load(Ordering::Relaxed), 0);
-            let first = ab.swap(None, Ordering::AcqRel);
+            let first = ab.swap(None, Ordering::Acquire);
             assert_eq!(n.load(Ordering::Relaxed), 0);
             drop(first);
             assert_eq!(n.load(Ordering::Relaxed), 5);
